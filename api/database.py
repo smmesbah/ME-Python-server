@@ -1,25 +1,25 @@
 import pymongo
 import pymongo.errors
-from testing import get_embedding
+from api.testing import get_embedding
 
-mongo_uri = "mongodb+srv://Samina:samina@cluster0.grz1bag.mongodb.net/"
+# mongo_uri = "mongodb+srv://Samina:samina@cluster0.grz1bag.mongodb.net/"
 
-def get_mongo_client(mongo_uri):
-    """Establish connection to the MongoDB"""
+# def get_mongo_client(mongo_uri):
+#     """Establish connection to the MongoDB"""
 
-    try: 
-        client = pymongo.MongoClient(mongo_uri)
-        print("Connected to MongoDB successfully")
-        return client
-    except pymongo.errors.ConnectionFailure as e: 
-        print(f"Connection failed: {e}")
-        return None
+#     try: 
+#         client = pymongo.MongoClient(mongo_uri)
+#         print("Connected to MongoDB successfully")
+#         return client
+#     except pymongo.errors.ConnectionFailure as e: 
+#         print(f"Connection failed: {e}")
+#         return None
     
-mongo_client = get_mongo_client(mongo_uri)
+# mongo_client = get_mongo_client(mongo_uri)
 
-db  = mongo_client["movies"]
+# db  = mongo_client["movies"]
 
-collection = db["moviee_collection_2"]
+# collection = db["moviee_collection_2"]
 # collection.delete_many({})
 
 # documents = dataset_df.to_dict("records")
@@ -50,9 +50,9 @@ def vector_search(user_query, collection):
     pipeline = [
         {
             "$vectorSearch":{
-                "index":"vector_index",
+                "index":"history_index",
                 "queryVector": query_embedding,
-                "path":"embedding",
+                "path":"description_embedding",
                 "numCandidates": 150,
                 "limit": 4, # Return top 4 matches
                 
@@ -60,11 +60,10 @@ def vector_search(user_query, collection):
         },
         {
             "$project":{
-                "_id": 0, # Exclude the _id field
-                "fullplot": 1, # Include the plot field
-                "title": 1, # Include the title field
-                "genres": 1, # Include the genres field
-                "score": {"$meta": "vectorSearchScore"}, # Include the search score
+                "_id": 0, 
+                "user_id": 1,
+                "description": 1,
+                "description_embedding": 1
             }
         }
     ]
@@ -81,15 +80,15 @@ def get_search_result(query, collection):
 
     search_result = ""
     for result in get_knowledge:
-        search_result += f"Title: {result.get('title', 'N/A')}, Plot: {result.get('fullplot', 'N/A')}\n"
+        search_result += f"Description: {result.get('description', 'N/A')}\n"
     # print(search_result)
     return search_result
 
-query = "What is the best romantic movie to watch and why?"
-source_information = get_search_result(query, collection)
+# query = "What is the best romantic movie to watch and why?"
+# source_information = get_search_result(query, collection)
 
-combined_information = (
-    f"Query: {query}\nContinue to answer the query by using the Search Results:\n{source_information}."
-)
+# combined_information = (
+#     f"Query: {query}\nContinue to answer the query by using the Search Results:\n{source_information}."
+# )
 
-print(combined_information)
+# print(combined_information)
