@@ -6,6 +6,7 @@ from bson import ObjectId
 from api.testing import get_embedding
 from api.database import get_search_result
 from api.gemma import client
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 
@@ -29,6 +30,7 @@ async def post_history(user_id: str, description: str):
 # GET vector search
 @router.get("/vector_search")
 async def get_vector_search(query: str):
+    print("api hit")
     search_result = get_search_result(query, collection_history)
     combined_information = (
         f"Query: {query}\n\n Continue to answer the query by using the Search Results:\n{search_result}."

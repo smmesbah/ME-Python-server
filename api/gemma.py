@@ -2,7 +2,7 @@ from huggingface_hub import InferenceClient
 
 client = InferenceClient(
     "google/gemma-2b-it",
-    token="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",
+    token="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",
 )
 
 # for message in client.chat_completion(
