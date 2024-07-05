@@ -1,6 +1,7 @@
 import pymongo
 import pymongo.errors
-from api.testing import get_embedding
+# from api.testing import get_embedding
+from api.openaiEmbedding import get_embedding
 
 # mongo_uri = "mongodb+srv://Samina:samina@cluster0.grz1bag.mongodb.net/"
 
@@ -41,7 +42,6 @@ def vector_search(user_query, collection):
     
     # Generate embedding for the user query
     query_embedding = get_embedding(user_query)
-    # print(query_embedding)
     
     if query_embedding is None:
         return "Invalid query or embedding generation failed."
@@ -51,19 +51,29 @@ def vector_search(user_query, collection):
         {
             "$vectorSearch":{
                 "index":"history_index",
+                "filter": {"user_id": {"$eq": "asdfg"}},
                 "queryVector": query_embedding,
                 "path":"description_embedding",
                 "numCandidates": 150,
-                "limit": 4, # Return top 4 matches
+                "limit": 10,
                 
             }
+        },
+        {
+            "$addFields":{
+                "score": {"$meta": "vectorSearchScore"}
+            }
+        },
+        {
+            "$match": {"score": {"$gt": 0.7}}
         },
         {
             "$project":{
                 "_id": 0, 
                 "user_id": 1,
                 "description": 1,
-                "description_embedding": 1
+                "description_embedding": 1,
+                "score": {"$meta": "vectorSearchScore"}
             }
         }
     ]
@@ -80,7 +90,7 @@ def get_search_result(query, collection):
 
     search_result = ""
     for result in get_knowledge:
-        search_result += f"Description: {result.get('description', 'N/A')}\n"
+        search_result += f"Task infromation: {result.get('description', 'N/A')}\n score: {result.get('score', 'N/A')}\n\n"
     # print(search_result)
     return search_result
 
