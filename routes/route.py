@@ -1,20 +1,21 @@
-from fastapi import APIRouter
-from models.models import History, PostHistory, Todo
+from fastapi import APIRouter, WebSocket
+from models.models import PostHistory, Todo
 from config.database import collection_history, collection_user, collection_todos
 from schema.schemas import list_serial_history, list_serial_user, list_serial_todo
 from bson import ObjectId
-# from api.testing import get_embedding
 from api.openaiEmbedding import get_embedding
 from api.database import get_search_result
-from api.gemma import client
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from dotenv import load_dotenv
-
+from fastapi.responses import StreamingResponse
+import os
+from openai import OpenAI
 load_dotenv()
 
 router = APIRouter()
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
 
 # GET histories
 @router.get("/history")
@@ -41,46 +42,76 @@ async def post_history(postHistory: PostHistory):
     return {"message": "History has been added successfully.", "status": "success"}
 
 # GET vector search
-@router.get("/vector_search")
-async def get_vector_search(query: str):
+@router.websocket("/vector_search")
+async def get_vector_search(websocket: WebSocket):
     print("api hit")
-    search_result = get_search_result(query, collection_history)
-    print(search_result)
-
-    # gpt
-    prompt = ChatPromptTemplate.from_messages(
-        [
-        (
-            "Answer using context."
-        ),
-        (
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            query = data
+            print(data)
+            search_result = get_search_result(query, collection_history)
+            # print(search_result)
+            combined_information = f"""
+                Context: {search_result}
+                Question: {query}
+                Answer: Your answer goes here
             """
-            Context: {search_result}
-            Question: {question}
-            Answer: Your answer goes here.
-            """
-        )
-        ]
-    )
-    llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0)
-    chain = prompt | llm
-    response = chain.invoke({"search_result": search_result, "question": query})
-    print(response.content)
+            # print(search_result)
+            # gpt
+            # prompt = ChatPromptTemplate.from_messages(
+            #     [
+            #     (
+            #         "Answer using context. If no context, answer based on your knowledge."
+            #     ),
+            #     (
+            #         """
+            #         Context: {search_result}
+            #         Question: {question}
+            #         Answer: Your answer goes here.
+            #         """
+            #     )
+            #     ]
+            # )
+            # llm = ChatOpenAI(model="gpt-3.5-turbo-0125", temperature=0, streaming=True, callbacks=[StreamingStdOutCallbackHandler()])
+            # chain = prompt | llm
+            # get the streaming response
 
+            # chat=list()
+            # response = chain.invoke({"search_result": search_result, "question": query})
+            # print("Response",response)
+            chat_completion = client.chat.completions.create(
+            messages=[
+            {
+                "role": "system",
+                "content": "Answer using context. If no context, answer based on your knowledge."
+            },
+            {
+                "role": "user",
+                "content": combined_information
+            }
+            ],
+            model= "gpt-3.5-turbo-0125", # "gpt-3.5-turbo-0125
+            temperature=0,
+            stream=True
+            )
 
-    # print(combined_information)
-    # response = ""
-    # for message in client.chat_completion(
-    #     messages=[{"role": "user", "content": combined_information}],
-    #     max_tokens=500,
-    #     stream=True,
-    # ):
-    #     response += message.choices[0].delta.content
-
-    # print(response, end="")
-    
-    return response.content
-    # return search_result
+            for chunk in chat_completion:
+                content = chunk.choices[0].delta.content or ""
+                if content:
+                    await websocket.send_text(content)
+            await websocket.send_text("End of response")
+            # await websocket.close()
+    except Exception as e:
+        print(e)
+        await websocket.close()
+        return {"message": "Error in vector search", "status": "error"}
+    # async def stream_response():
+    #     for chunk in chat:
+    #         print chunk
+    # return StreamingResponse(stream_response(), media_type="text/event-stream")
+    # return StreamingResponse(response.content, media_type="text/event-stream")
 
 # GET users 
 @router.get("/user")

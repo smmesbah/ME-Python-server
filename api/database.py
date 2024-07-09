@@ -65,7 +65,7 @@ def vector_search(user_query, collection):
             }
         },
         {
-            "$match": {"score": {"$gt": 0.7}}
+            "$match": {"score": {"$gt": 0.6}}
         },
         {
             "$project":{
