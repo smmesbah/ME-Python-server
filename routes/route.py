@@ -1,21 +1,25 @@
-from fastapi import APIRouter, WebSocket
+from fastapi import APIRouter, WebSocket, Request, HTTPException
+import httpx
 from models.models import PostHistory, Todo
-from config.database import collection_history, collection_user, collection_todos
+from config.database import collection_history, collection_user, collection_todos, collection_slack_access
 from schema.schemas import list_serial_history, list_serial_user, list_serial_todo
 from bson import ObjectId
 from api.openaiEmbedding import get_embedding
 from api.database import get_search_result
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from dotenv import load_dotenv
-from fastapi.responses import StreamingResponse
 import os
 from openai import OpenAI
+from slack_sdk import WebClient
+from slackIntegration.slackTest import get_channels, fetch_channel_messages
 load_dotenv()
 
 router = APIRouter()
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+
+tokens = []
+SLACK_CLIENT_ID = os.environ.get("SLACK_CLIENT_ID")
+SLACK_CLIENT_SECRET = os.environ.get("SLACK_CLIENT_SECRET")
+SLACK_REDIRECT_URI = os.environ.get("SLACK_REDIRECT_URI")
 
 # GET histories
 @router.get("/history")
@@ -52,7 +56,7 @@ async def get_vector_search(websocket: WebSocket):
             query = data
             print(data)
             search_result = get_search_result(query, collection_history)
-            # print(search_result)
+            print(search_result)
             combined_information = f"""
                 Context: {search_result}
                 Question: {query}
@@ -190,3 +194,58 @@ async def delete_todo_by_id(id: str):
 async def get_indexes():
     indexes = collection_history.index_information()
     return indexes
+
+@router.get('/oauth/callback')
+async def oauth_callback(request: Request):
+    # print("code: ", request.query_params.get("code"))
+    code = request.query_params.get("code")
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://slack.com/api/oauth.v2.access",
+            data={
+                "client_id": os.environ["SLACK_CLIENT_ID"],
+                "client_secret": os.environ["SLACK_CLIENT_SECRET"],
+                "code": code,
+                "redirect_uri": os.environ["SLACK_REDIRECT_URI"],
+            }
+        )
+        data = response.json()
+        
+    if not data.get("ok"):
+        raise HTTPException(status_code=400, detail="Error during OAuth")
+    team_id = data["team"]["id"]
+    access_token = data["access_token"]
+    team_name = data["team"]["name"]    
+    collection_slack_access.update_one(
+        {"team_id": team_id},
+        {"$set": {"team_name": team_name, "access_token": access_token}},
+        upsert=True
+    )
+    return {"Message": "Successful", "team_id": data["team"]["id"], "access": data["access_token"], "team_name": data["team"]["name"]}
+
+@router.get("/get_tokens")
+async def get_tokens():
+    print("tokens: ", tokens)
+    return tokens
+
+@router.get("/slack_channel_messages")
+async def get_slack_channel_messages():
+    # print("tokens: ", tokens)
+    client = WebClient(token=os.environ["SLACK_TOKEN"])
+    bot_channels = get_channels(client)
+    channel_messages = []
+    for bots in bot_channels:
+        messages = fetch_channel_messages(client, bots["id"], 10) 
+        channel_messages.append({"Channel": bots["name"],"messages": messages})
+    
+    print(channel_messages)
+
+@router.post("/send_slack_messages")
+async def send_slack_messages(text: str, channel_name: str):
+    try:
+        client = WebClient(token = os.environ["SLACK_TOKEN"])
+        response = client.chat_postMessage(channel=channel_name, text=text)
+        return {"message": "Message sent successfully", "status": "success"}
+    except Exception as e:
+        print(f"Error: {e}")
+        return {"message": "Error in sending message", "status": "error"}    

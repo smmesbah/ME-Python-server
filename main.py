@@ -5,8 +5,53 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI() 
+tokens=[]
 
 app.include_router(router)
+
+# @app.get('/oauth/callback')
+# async def oauth_callback(request: Request):
+#     # print("code: ", request.query_params.get("code"))
+#     code = request.query_params.get("code")
+#     async with httpx.AsyncClient() as client:
+#         response = await client.post(
+#             "https://slack.com/api/oauth.v2.access",
+#             data={
+#                 "client_id": os.environ["SLACK_CLIENT_ID"],
+#                 "client_secret": os.environ["SLACK_CLIENT_SECRET"],
+#                 "code": code,
+#                 "redirect_uri": os.environ["SLACK_REDIRECT_URI"],
+#             }
+#         )
+#         data = response.json()
+        
+#     if not data.get("ok"):
+#         raise HTTPException(status_code=400, detail="Error during OAuth")
+#     team_id = data["team"]["id"]
+#     access_token = data["access_token"]
+#     tokens.append({"team_id": team_id, "access_token": access_token})
+#     print("tokens", tokens)
+#     return {"Message": "Successful", "team_id": data["team"]["id"], "access": data["access_token"], "team_name": data["team"]["name"]}
+
+
+# @app.get("/get_tokens")
+# async def get_tokens():
+#     print("tokens: ", tokens)
+#     return tokens
+
+# @app.get("/slack_channel_messages")
+# async def get_slack_channel_messages():
+#     # print("tokens: ", tokens)
+#     client = WebClient(token=tokens[0]["access_token"])
+#     bot_channels = get_channels(client)
+#     channel_messages = []
+#     for bots in bot_channels:
+#         messages = fetch_channel_messages(client, bots["id"], 10) 
+#         channel_messages.append({"Channel": bots["name"],"messages": messages})
+    
+#     print(channel_messages)
+
+
 
 # @app.get("/")
 # def index():
